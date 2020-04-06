@@ -137,19 +137,6 @@ public:
 };
 
 /**
- * This enumeration is used to control how acceleration is handled within a particular instance
- * of a HardwareRotaryEncoder.
- */
-enum HWAccelerationMode : byte {
-    /** No acceleration, no matter how fast the encoder is turned */
-    HWACCEL_NONE,
-    /** The default, accelerates based on how fast the encoder is turned */
-    HWACCEL_REGULAR,
-    /** Slower acceleration than above is applied */ 
-    HWACCEL_SLOWER
-};
-
-/**
  * Rotary encoder is the base class of both the hardware rotary encoder and the up / down button version. 
  * It handles storing the current value, setting and managing the range of allowed values and calling
  * back when the encoder changes.
@@ -191,10 +178,20 @@ public:
 	 * internal method not for external use..
 	 */
 	virtual void encoderChanged() {;}
-	virtual void setAccelerationMode(HWAccelerationMode mode) {;}	
 };
 
-
+/**
+ * This enumeration is used to control how acceleration is handled within a particular instance
+ * of a HardwareRotaryEncoder.
+ */
+enum HWAccelerationMode : byte {
+    /** No acceleration, no matter how fast the encoder is turned */
+    HWACCEL_NONE,
+    /** The default, accelerates based on how fast the encoder is turned */
+    HWACCEL_REGULAR,
+    /** Slower acceleration than above is applied */ 
+    HWACCEL_SLOWER
+};
 
 /**
  * An implementation of RotaryEncoder that supports the most common types of rotary encoder, needed no additional hardware
@@ -209,11 +206,11 @@ private:
 	uint8_t aLast;
 	uint8_t cleanFromB;
     HWAccelerationMode accelerationMode;
-
+	
 public:
 	HardwareRotaryEncoder(uint8_t pinA, uint8_t pinB, EncoderCallbackFn callback);
 	virtual void encoderChanged();
-    virtual void setAccelerationMode(HWAccelerationMode mode) { accelerationMode =  mode; }
+    void setAccelerationMode(HWAccelerationMode mode) { accelerationMode =  mode; }
 private:
 	int amountFromChange(unsigned long change);
 };
