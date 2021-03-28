@@ -1,10 +1,19 @@
+/*
+ * Copyright (c) 2018 https://www.thecoderscorner.com (Nutricherry LTD).
+ * This product is licensed under an Apache license, see the LICENSE file in the top-level directory.
+ */
 
-#ifndef _ARDUNIO_EEPROM_ABS_H
+#if !defined(_ARDUNIO_EEPROM_ABS_H) && !defined(__MBED__)
 #define _ARDUNIO_EEPROM_ABS_H
 
 #include <Arduino.h>
 #include "EEPROM.h"
 #include "EepromAbstraction.h"
+
+/**
+ * @file ArduinoEEPROMAbstraction.h
+ * A wrapper around the Arduino EEPROM support.
+ */
 
 /**
  * Provides a wrapper around the EEPROM class available on some Arduino boards. For AVR 8bit boards
@@ -35,7 +44,7 @@ public:
     }
 
    	uint32_t read32(EepromPosition pos) override {
-        return (uint32_t)eepromProxy->read(pos + 3) << 24 | (uint32_t)eepromProxy->read(pos + 2) << 16 | 
+        return (uint32_t)eepromProxy->read(pos + 3) << 24 | (uint32_t)eepromProxy->read(pos + 2) << 16 |
                (uint32_t)eepromProxy->read(pos + 1) << 8 | (uint32_t)eepromProxy->read(pos + 0);
     }
 
@@ -74,4 +83,4 @@ public:
     }
 };
 
-#endif // _ARDUNIO_EEPROM_ABS_H
+#endif // !defined(_ARDUNIO_EEPROM_ABS_H) && !defined(_NO_EEPROM_CLASS_)

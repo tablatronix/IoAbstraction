@@ -7,13 +7,19 @@
  * @file EepromAbstraction.h
  * 
  * Wraps up EEPROM support in a way that is compatible between implementations. For example presently there
- * are AVR and i2c implemenations that work interchangably. Adding another variant is quite trivial.
+ * are AVR, EEPROM, and i2c implementations that work interchangeably. Adding another variant is quite trivial.
  */
 
 #ifndef _IOABSTRACTION_EEPROMABSTRACTION_H_
 #define _IOABSTRACTION_EEPROMABSTRACTION_H_
 
+#include "PlatformDetermination.h"
+
+#ifdef IOA_USE_MBED
+#include <mbed.h>
+#else
 #include <Arduino.h>
+#endif
 
 /**
  * Defines an address or position within the eeprom storage 

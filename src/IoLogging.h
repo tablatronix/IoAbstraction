@@ -4,34 +4,72 @@
 /**
  * @file IoLogging.h
  *
- * Some very basic logging utilities for any IoAbstraction user that log to a chosen serial interface. Turned on  by un-commenting
- * the IO_LOGGING_ON define.
+ * Some very basic logging utilities for any IoAbstraction user that log to a chosen serial interface. Turned on
+ * by un-commenting the define. Should NOT be used in production.
  */
+
+#include "PlatformDetermination.h"
 
 // START user adjustable section.
 
-// When line below commented out - no logging, when un-commented - logging.
+// When line below commented out - no logging, when un-commented - logging. You can also define this macro in your build system
 //#define IO_LOGGING_DEBUG
 
 // END user adjustable section.
 
 #ifdef IO_LOGGING_DEBUG
 
-// change to log elsewhere than Serial.
+
+#ifdef IOA_USE_MBED
+
+#include "PrintCompat.h"
+#include <FileHandle.h>
+//
+// On mbed you create an instance of this class called LoggingPort in your main class.
+// see the mbed example.
+//
+class MBedLogger : public Print {
+private:
+    FileHandle& serial;
+public:
+    MBedLogger(FileHandle& serialName) : serial(serialName) {}
+
+    size_t write(uint8_t ch) override {
+        serial.write(&ch, 1);
+        return 1;
+    }
+
+    size_t write(const char* sz) override {
+        auto len = strlen(sz);
+        serial.write(sz, len);
+        return len;
+    }
+};
+extern MBedLogger LoggingPort;
+// a couple of definitions here to avoid including headers, F() macro not needed on mbed
+unsigned long millis();
+#define F(x) x
+#else
+
+// Arduino:
+// You can change the logging serial port by defining LoggingPort to your chosen serial port.
+#ifndef LoggingPort
 #define LoggingPort Serial
+#endif
+#endif
 
 #define logTime(title) LoggingPort.print(millis());LoggingPort.print(':');LoggingPort.print(title)
 #define serdebugF(x) logTime(F(x));LoggingPort.println();
-#define serdebugF2(x1, x2) logTime(F(x1)); LoggingPort.println(x2);
-#define serdebugF3(x1, x2, x3) logTime(F(x1)); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.println(x3);
-#define serdebugF4(x1, x2, x3, x4) logTime(F(x1)); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.print(x3); LoggingPort.print(' '); LoggingPort.println(x4);
-#define serdebugFHex(x1, x2) logTime(F(x1)); LoggingPort.println(x2, HEX);
-#define serdebugFHex2(x1, x2, x3) logTime(F(x1)); LoggingPort.print(x2, HEX); LoggingPort.print(','); LoggingPort.println(x3, HEX);
+#define serdebugF2(x1, x2) logTime(F(x1)); LoggingPort.print(x2);LoggingPort.println();
+#define serdebugF3(x1, x2, x3) logTime(F(x1)); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.print(x3);LoggingPort.println();
+#define serdebugF4(x1, x2, x3, x4) logTime(F(x1)); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.print(x3); LoggingPort.print(' '); LoggingPort.print(x4);LoggingPort.println();
+#define serdebugFHex(x1, x2) logTime(F(x1)); LoggingPort.print(x2, HEX);LoggingPort.println();
+#define serdebugFHex2(x1, x2, x3) logTime(F(x1)); LoggingPort.print(x2, HEX); LoggingPort.print(','); LoggingPort.print(x3, HEX);LoggingPort.println();
 #define serdebug(x) logTime(x);LoggingPort.println();
-#define serdebug2(x1, x2) logTime(x1); LoggingPort.println(x2);
-#define serdebug3(x1, x2, x3) logTime(x1); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.println(x3);
-#define serdebugHex(x1, x2) logTime(x1); LoggingPort.println(x2, HEX);
-#define serdebugHexDump(x, str, strlen) logTime(x); for(int ii=0;ii<strlen;ii++) { Serial.print((int)str[ii], HEX); }; Serial.println();
+#define serdebug2(x1, x2) logTime(x1); LoggingPort.print(x2);LoggingPort.println();
+#define serdebug3(x1, x2, x3) logTime(x1); LoggingPort.print(x2); LoggingPort.print(' '); LoggingPort.print(x3);LoggingPort.println();
+#define serdebugHex(x1, x2) logTime(x1); LoggingPort.print(x2, HEX);LoggingPort.println();
+#define serdebugHexDump(x, str, strlen) logTime(x); for(int ii=0;ii<strlen;ii++) { Serial.print((int)str[ii], HEX); Serial.print(' '); }; Serial.println();
 #else
 // all loging to no operations (commenting out the above define of IO_LOGGING_DEBUG to remove in production builds).
 #define serdebugF(x) 

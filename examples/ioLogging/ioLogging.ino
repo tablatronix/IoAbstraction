@@ -8,6 +8,8 @@
  * This logging is only complied in when the above define is set, if it is not set then
  * the logging is completely removed.
  */
+
+#include <TaskManagerIO.h>
 #include <IoAbstraction.h>
 
 char sz[] = {"hello world"};
@@ -24,6 +26,8 @@ void setup() {
         // write values to log in HEX - first parameter is wrapped in F(..) using the F variant
         serdebugFHex2("Two Values in hex: ", 0xFADE, 0xFACE);
         serdebugFHex("One Values in hex: ", 0xFADE);
+        serdebugF2("Int value: ", 109298384L);
+        serdebugF2("Bool value: ", true)
 
         // the F variant always tries to use F(..) to save ram on the first parameter on AVR
         serdebugF("String in flash");

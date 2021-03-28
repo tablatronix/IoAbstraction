@@ -4,43 +4,73 @@
  */
 
 #include <inttypes.h>
-#include <Arduino.h>
 #include "SwitchInput.h"
 
 #define ONE_TURN_OF_ENCODER 32
 
 SwitchInput switches;
 
-void registerInterrupt(uint8_t pin);
+void registerInterrupt(pinid_t pin);
 
 KeyboardItem::KeyboardItem() {
 	this->repeatInterval = NO_REPEAT;
 	this->pin = -1;
-	this->notify.callback = NULL;
+	this->notify.callback = nullptr;
 	this->counter = 0;
 	this->stateFlags = NOT_PRESSED;
 	this->previousState = NOT_PRESSED;
-	this->callbackOnRelease = NULL;
+	this->callbackOnRelease = nullptr;
+	this->acceleration = 0;
 }
 
-void KeyboardItem::initialise(uint8_t pin, KeyCallbackFn callback, uint8_t repeatInterval, bool keyLogicIsInverted) {
+KeyboardItem::KeyboardItem(pinid_t pin, KeyCallbackFn callback, uint8_t repeatInterval, bool keyLogicIsInverted) {
+    this->repeatInterval = repeatInterval;
+    this->pin = pin;
 	this->notify.callback = callback;
-	this->pin = pin;
-	this->repeatInterval = repeatInterval;
+	this->counter = 0;
 	previousState = NOT_PRESSED;
 	stateFlags = NOT_PRESSED;
+	callbackOnRelease = nullptr;
+	acceleration = 0;
 	bitWrite(stateFlags, KEY_LISTENER_MODE_BIT, 0);
 	bitWrite(stateFlags, KEY_LOGIC_IS_INVERTED, keyLogicIsInverted);
 }
 
-void KeyboardItem::initialise(uint8_t pin, SwitchListener* switchListener, uint8_t repeatInterval, bool keyLogicIsInverted) {
-	this->notify.listener = switchListener;
+KeyboardItem::KeyboardItem(pinid_t pin, SwitchListener* switchListener, uint8_t repeatInterval, bool keyLogicIsInverted) {
 	this->pin = pin;
 	this->repeatInterval = repeatInterval;
-	previousState = NOT_PRESSED;
+    this->notify.listener = switchListener;
+    this->counter = 0;
+    previousState = NOT_PRESSED;
 	stateFlags = NOT_PRESSED;
+	callbackOnRelease = nullptr;
+	acceleration = 0;
 	bitWrite(stateFlags, KEY_LISTENER_MODE_BIT, 1);
 	bitWrite(stateFlags, KEY_LOGIC_IS_INVERTED, keyLogicIsInverted);
+}
+
+KeyboardItem::KeyboardItem(const KeyboardItem& other) {
+    this->pin = other.pin;
+    this->repeatInterval = other.repeatInterval;
+    this->counter = other.counter;
+    this->notify.listener = other.notify.listener;
+    this->previousState = other.previousState;
+    this->stateFlags = other.stateFlags;
+    this->callbackOnRelease = other.callbackOnRelease;
+    this->acceleration = other.acceleration;
+}
+
+KeyboardItem& KeyboardItem::operator=(const KeyboardItem& other) {
+    if(this == &other) return *this;
+    this->pin = other.pin;
+    this->repeatInterval = other.repeatInterval;
+    this->counter = other.counter;
+    this->notify.listener = other.notify.listener;
+    this->previousState = other.previousState;
+    this->stateFlags = other.stateFlags;
+    this->callbackOnRelease = other.callbackOnRelease;
+    this->acceleration = other.acceleration;
+    return *this;
 }
 
 void KeyboardItem::onRelease(KeyCallbackFn callbackOnRelease) {
@@ -60,7 +90,7 @@ void KeyboardItem::triggerRelease(bool held) {
 }
 
 void KeyboardItem::checkAndTrigger(uint8_t buttonState){
-	if (notify.callback == NULL && callbackOnRelease == NULL) return; 
+	if (notify.callback == nullptr && callbackOnRelease == nullptr) return;
 
 	if (buttonState == HIGH) {
 		if (getState() == NOT_PRESSED) {
@@ -109,19 +139,17 @@ void KeyboardItem::checkAndTrigger(uint8_t buttonState){
 }
 
 SwitchInput::SwitchInput() {
-	this->numberOfKeys = 0;	
-	this->ioDevice = NULL;
+	this->ioDevice = nullptr;
 	this->swFlags = 0;
     this->lastSyncStatus = true;
 	for (int i = 0; i < MAX_ROTARY_ENCODERS; ++i) {
-		encoder[i] = NULL;
+		encoder[i] = nullptr;
 	}
 }
 
 void SwitchInput::initialiseInterrupt(IoAbstractionRef ioDevice, bool usePullUpSwitching) {
 	this->ioDevice = ioDevice;
 	this->swFlags = 0;
-	this->numberOfKeys = 0;
 	bitWrite(swFlags, SW_FLAG_PULLUP_LOGIC, usePullUpSwitching);
 	bitSet(swFlags, SW_FLAG_INTERRUPT_DRIVEN);
 
@@ -131,36 +159,34 @@ void SwitchInput::initialiseInterrupt(IoAbstractionRef ioDevice, bool usePullUpS
 void SwitchInput::initialise(IoAbstractionRef ioDevice, bool usePullUpSwitching) {
 	this->ioDevice = ioDevice;
 	this->swFlags = 0;
-	this->numberOfKeys = 0;
-	bitWrite(swFlags, SW_FLAG_PULLUP_LOGIC, usePullUpSwitching);
+    	bitWrite(swFlags, SW_FLAG_PULLUP_LOGIC, usePullUpSwitching);
 
-	taskManager.scheduleFixedRate(20, [] {
+	taskManager.scheduleFixedRate(SWITCH_POLL_INTERVAL, [] {
 		switches.runLoop();
 	});
 
 }
 
-bool SwitchInput::addSwitch(uint8_t pin, KeyCallbackFn callback,uint8_t repeat, bool invertLogic) {
+bool SwitchInput::addSwitch(pinid_t pin, KeyCallbackFn callback,uint8_t repeat, bool invertLogic) {
 	if(internalAddSwitch(pin, invertLogic)) {
-    	keys[numberOfKeys++].initialise(pin, callback, repeat, invertLogic);
-    	return true;
+        KeyboardItem item(pin, callback, repeat, invertLogic);
+        return keys.add(item);
     }
     
     return false;
 }
 
-bool SwitchInput::addSwitchListener(uint8_t pin, SwitchListener* listener, uint8_t repeat, bool invertLogic) {
+bool SwitchInput::addSwitchListener(pinid_t pin, SwitchListener* listener, uint8_t repeat, bool invertLogic) {
 	if(internalAddSwitch(pin, invertLogic)) {
-        keys[numberOfKeys++].initialise(pin, listener, repeat, invertLogic);
-    	return true;
+        KeyboardItem item(pin, listener, repeat, invertLogic);
+        return keys.add(item);
     }
     
     return false;
 }
 
-bool SwitchInput::internalAddSwitch(uint8_t pin, bool invertLogic) {
-	if (numberOfKeys >= MAX_KEYS) return false;
-	if (ioDevice == NULL) initialise(ioUsingArduino(), true);
+bool SwitchInput::internalAddSwitch(pinid_t pin, bool invertLogic) {
+	if (ioDevice == nullptr) initialise(internalDigitalIo(), true);
 
 	ioDevicePinMode(ioDevice, pin, isPullupLogic(invertLogic) ? INPUT_PULLUP : INPUT);
 
@@ -171,37 +197,32 @@ bool SwitchInput::internalAddSwitch(uint8_t pin, bool invertLogic) {
     return true;
 }
 
-void SwitchInput::onRelease(uint8_t pin, KeyCallbackFn callbackOnRelease) {
-	if (ioDevice == NULL) initialise(ioUsingArduino(), true);
+void SwitchInput::onRelease(pinid_t pin, KeyCallbackFn callbackOnRelease) {
+	if (ioDevice == nullptr) initialise(internalDigitalIo(), true);
 
-	for(uint8_t i=0; i<numberOfKeys; ++i) {
-		if(keys[i].getPin() == pin) {
-			keys[i].onRelease(callbackOnRelease);
-			return;
-		}
+	auto keyItem = keys.getByKey(pin);
+	if(pin) {
+	    // already initialised, just add the release callback
+	    keyItem->onRelease(callbackOnRelease);
 	}
+	else if(internalAddSwitch(pin, false)) {
+	    // not yet added, we will do a best efforts standard initialisation.
+        KeyboardItem newItem(pin, (KeyCallbackFn) nullptr, NO_REPEAT, false);
+        newItem.onRelease(callbackOnRelease);
+        keys.add(newItem);
+    }
 }
 
-bool SwitchInput::isSwitchPressed(uint8_t pin) {
-	for(uint8_t i=0; i<numberOfKeys; ++i) {
-		if(keys[i].getPin() == pin) {
-			return keys[i].isPressed();
-		}
-	}
-	return false;
+bool SwitchInput::isSwitchPressed(pinid_t pin) {
+    return keys.getByKey(pin)->isPressed();
 }
 
-void SwitchInput::pushSwitch(uint8_t pin, bool held) {
-	for(uint8_t i=0; i<numberOfKeys; ++i) {
-		if(keys[i].getPin() == pin) {
-			keys[i].trigger(held);
-			return;
-		}
-	}
+void SwitchInput::pushSwitch(pinid_t pin, bool held) {
+    keys.getByKey(pin)->trigger(held);
 }
 
 void SwitchInput::changeEncoderPrecision(uint8_t slot, uint16_t precision, uint16_t currentValue) {
-	if (slot < MAX_ROTARY_ENCODERS && encoder[slot] != NULL) {
+	if (slot < MAX_ROTARY_ENCODERS && encoder[slot] != nullptr) {
 		encoder[slot]->changePrecision(precision, currentValue);
 	}
 }
@@ -217,17 +238,18 @@ bool SwitchInput::runLoop() {
 
 	lastSyncStatus = ioDeviceSync(ioDevice);
 
-	for (int i = 0; i < numberOfKeys; ++i) {
+	for (bsize_t i = 0; i < keys.count(); ++i) {
 		// get the pins current state
-		uint8_t pinState = ioDeviceDigitalRead(ioDevice, keys[i].getPin());
-		if(isPullupLogic(keys[i].isLogicInverted())) {
+		auto key = keys.itemAtIndex(i);
+		uint8_t pinState = ioDeviceDigitalRead(ioDevice, key->getPin());
+		if(isPullupLogic(key->isLogicInverted())) {
 			pinState = !pinState;
 		}
 		// and pass to the key handler.
-		keys[i].checkAndTrigger(pinState);
+		key->checkAndTrigger(pinState);
 
 		// we need to call into here again if we are debouncing or anything is pressed.
-		needAnotherGo |= (keys[i].isDebouncing() || keys[i].isPressed());
+		needAnotherGo |= (key->isDebouncing() || key->isPressed());
 	}
 
 	return needAnotherGo;
@@ -242,12 +264,22 @@ RotaryEncoder::RotaryEncoder(EncoderCallbackFn callback) {
 	this->currentReading = 0;
 	this->maximumValue = 0;
     this->lastSyncStatus = true;
+    this->intent = CHANGE_VALUE;
 }
 
 void RotaryEncoder::changePrecision(uint16_t maxValue, int currentValue) {
 	this->maximumValue = maxValue;
 	this->currentReading = currentValue;
+	if(maxValue == 0 && currentValue == 0U) intent = DIRECTION_ONLY;
 	callback(currentReading);
+}
+
+void RotaryEncoder::setUserIntention(EncoderUserIntention intention) {
+    intent = intention;
+    if(intention == DIRECTION_ONLY) {
+        maximumValue = 0;
+        currentReading = 0;
+    }
 }
 
 void RotaryEncoder::increment(int8_t incVal) {
@@ -259,7 +291,7 @@ void RotaryEncoder::increment(int8_t incVal) {
 
     // otherwise run through all the possibilities
 	if(incVal >= 0) {
-		if(currentReading + incVal <= maximumValue) {
+		if(currentReading != maximumValue) {
 			currentReading = min((uint16_t)(currentReading + incVal), maximumValue);
 			callback(currentReading);
 		}
@@ -274,12 +306,11 @@ void RotaryEncoder::increment(int8_t incVal) {
 	}	
 }
 
-HardwareRotaryEncoder::HardwareRotaryEncoder(uint8_t pinA, uint8_t pinB, EncoderCallbackFn callback) : RotaryEncoder(callback) {
+HardwareRotaryEncoder::HardwareRotaryEncoder(pinid_t pinA, pinid_t pinB, EncoderCallbackFn callback, HWAccelerationMode accelerationMode) : RotaryEncoder(callback) {
 	this->pinA = pinA;
 	this->pinB = pinB;
 	this->lastChange = micros();
-
-    accelerationMode = HWACCEL_REGULAR;
+    this->accelerationMode = accelerationMode;
 
 	// set the pin directions to input with pull ups enabled
 	ioDevicePinMode(switches.getIoAbstraction(), pinA, INPUT_PULLUP);
@@ -311,7 +342,7 @@ void checkRunLoopAndRepeat() {
 	}
 }
 
-void onSwitchesInterrupt(__attribute__((unused)) uint8_t pin) {
+void onSwitchesInterrupt(__attribute__((unused)) pinid_t pin) {
 	if(switches.isInterruptDriven() && !switches.isInterruptDebouncing()) {
 		checkRunLoopAndRepeat();
 	}
@@ -365,35 +396,37 @@ void HardwareRotaryEncoder::encoderChanged() {
 
 /******** UP DOWN BUTTON ENCODER *******/
 
-void switchEncoderUp(__attribute((unused)) uint8_t key, __attribute((unused)) bool heldDown) {
-	switches.encoder[0]->increment(1);
+void switchEncoderUp(__attribute((unused)) pinid_t key, __attribute((unused)) bool heldDown) {
+    int dir = (switches.getEncoder()->getUserIntention() == SCROLL_THROUGH_ITEMS) ? -1 : 1;
+	switches.getEncoder()->increment(dir);
 }
 
-void switchEncoderDown(__attribute((unused)) uint8_t key, __attribute((unused)) bool heldDown) {
-	switches.encoder[0]->increment(-1);
+void switchEncoderDown(__attribute((unused)) pinid_t key, __attribute((unused)) bool heldDown) {
+    int dir = (switches.getEncoder()->getUserIntention() == SCROLL_THROUGH_ITEMS) ? 1 : -1;
+	switches.getEncoder()->increment(dir);
 }
 
-EncoderUpDownButtons::EncoderUpDownButtons(uint8_t pinUp, uint8_t pinDown, EncoderCallbackFn callback, uint8_t speed) : RotaryEncoder(callback) {
+EncoderUpDownButtons::EncoderUpDownButtons(pinid_t pinUp, pinid_t pinDown, EncoderCallbackFn callback, uint8_t speed) : RotaryEncoder(callback) {
 	switches.addSwitch(pinUp, switchEncoderUp, speed);
 	switches.addSwitch(pinDown, switchEncoderDown, speed);
 }
 
 /******** ENCODER SETUP METHODS ***********/
 
-void setupUpDownButtonEncoder(uint8_t pinUp, uint8_t pinDown, EncoderCallbackFn callback) {
-	if (switches.getIoAbstraction() == NULL) switches.initialise(ioUsingArduino(), true);
+void setupUpDownButtonEncoder(pinid_t pinUp, pinid_t pinDown, EncoderCallbackFn callback) {
+	if (switches.getIoAbstraction() == nullptr) switches.initialise(internalDigitalIo(), true);
 
 	EncoderUpDownButtons* enc = new EncoderUpDownButtons(pinUp, pinDown, callback);
 	switches.setEncoder(enc);
 }
 
-void registerInterrupt(uint8_t pin) {
+void registerInterrupt(pinid_t pin) {
 	taskManager.setInterruptCallback(onSwitchesInterrupt);
 	taskManager.addInterrupt(switches.getIoAbstraction(), pin, CHANGE);
 }
 
-void setupRotaryEncoderWithInterrupt(uint8_t pinA, uint8_t pinB, EncoderCallbackFn callback) {
-	if (switches.getIoAbstraction() == NULL) switches.initialise(ioUsingArduino(), true);
+void setupRotaryEncoderWithInterrupt(pinid_t pinA, pinid_t pinB, EncoderCallbackFn callback, HWAccelerationMode accelerationMode) {
+	if (switches.getIoAbstraction() == nullptr) switches.initialise(internalDigitalIo(), true);
 
-	switches.setEncoder(new HardwareRotaryEncoder(pinA, pinB, callback));
+	switches.setEncoder(new HardwareRotaryEncoder(pinA, pinB, callback, accelerationMode));
 }

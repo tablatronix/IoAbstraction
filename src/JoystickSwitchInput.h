@@ -4,6 +4,8 @@
 #include "SwitchInput.h"
 #include "AnalogDeviceAbstraction.h"
 
+#define MAX_JOYSTICK_ACCEL 10.1F
+
 /**
  * @file JoystickSwitchInput.h
  * Provides a rotary encoder emulation based on an analog joystick. Normally used with
@@ -26,8 +28,10 @@
 class JoystickSwitchInput : public RotaryEncoder, public Executable {
 private:
     uint8_t analogPin;
-    uint8_t counter;
     AnalogDevice* analogDevice;
+    float tolerance = 0.03F;
+    float midPoint = 0.5F;
+    float accelerationFactor = 1000.0F;
 public:
     /** 
      * Constructor that initialises the class for use, prefer to use the set up method setupAnalogJoystickEncoder
@@ -42,16 +46,26 @@ public:
         analogDevice->initPin(analogPin, DIR_IN);
     }
 
+    /**
+     * Use this for situations where the tolerance of the joystick slightly off.
+     * IE the mid point is not exactly half or the tolerance is not sufficiently
+     * large to ignore deviations in the voltage level.
+     * @param midPoint_ the new midpoint to use.
+     * @param tolerance_ the size change to ignore around midpoint.
+     */
+    void setTolerance(float midPoint_, float tolerance_) {
+        tolerance = tolerance_;
+        midPoint = midPoint_;
+    }
+
     int nextInterval(int forceApplied) {
         switch(forceApplied) {
             case 0:
             case 1: return 250;
             case 2: return 200;
             case 3: return 150;
-            case 4: return 120;
-            case 5: return 100;
-            case 6: return 75;
-            default:return 50;
+            case 4: return 100;
+            default: return 50;
         }
     }
 
@@ -59,27 +73,25 @@ public:
      * Called by taskManager on a frequent basis. Ususally about every 250-500 millis
      */
     void exec() override {
-        // this provides 7 times acceleration at full extent.
-        int shiftAmt = analogDevice->getBitDepth(DIR_IN, analogPin) - 4;
+        float readVal = analogDevice->getCurrentFloat(analogPin) - midPoint;
 
-        int readVal = analogDevice->getCurrentValue(analogPin) >> shiftAmt;
-        
-        if(readVal == 7 || readVal == 8) {
-            // in the probable centre position - do nothing.
+        if(readVal > tolerance) {
+            int dir = (switches.getEncoder()->getUserIntention() == SCROLL_THROUGH_ITEMS) ? -1 : 1;
+            increment(dir);
+        }
+        else if(readVal < (-tolerance)) {
+            int dir = (switches.getEncoder()->getUserIntention() == SCROLL_THROUGH_ITEMS) ? 1 : -1;
+            increment(dir);
+        }
+        else {
+            accelerationFactor = 750.0F;
             taskManager.scheduleOnce(250, this);
+            return;
         }
-        else if(readVal > 8) {
-            // going up!
-            int val = readVal - 8;
-            increment(-val);
-            taskManager.scheduleOnce(nextInterval(val), this);
-        }
-        else /* less than 7 */ {
-            // going down less than 7..
-            int val = 7 - readVal;
-            increment(val);
-            taskManager.scheduleOnce(nextInterval(val), this);
-        }
+
+        auto delay = nextInterval(abs(readVal * MAX_JOYSTICK_ACCEL)) + accelerationFactor;
+        taskManager.scheduleOnce(delay, this);
+        accelerationFactor /= 3.0;
     }
 };
 
