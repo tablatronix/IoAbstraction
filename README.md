@@ -105,7 +105,7 @@ First we must register the callback function that will be called when there's a 
 		// do something with new value..
 	}
 
-Then we must create an encoder using one of the three examples below
+Then we create an encoder using one of the three examples below
 
 	// Example 1, Real encoder, we need to set up the pins that the encoder uses and provide a callback
 	setupRotaryEncoderWithInterrupt(encoderAPin, encoderBPin, onEncoderChange);
@@ -119,7 +119,16 @@ Then we must create an encoder using one of the three examples below
 	switches.setEncoder(0, firstEncoder);
 	switches.setEncoder(1, secondEncoder);
 
-Then lastly we set the precision of the encoder (IE the range)
+For the vast majority of encoders there is no need to provide the encoder type. If you have a quarter cycle rotary encoder, there is an extra optional constructor parameter for the encoder type, thanks go to @ddd999 for this support. The options are listed below: 
+
+    /** Detent after every signal change, A or B */
+    QUARTER_CYCLE,
+    /** Detent on every position where A == B */
+    HALF_CYCLE,
+    /** Detent after every full cycle of both signals, A and B */ 
+    FULL_CYCLE
+
+Then lastly we set the precision of the encoder (IE the range), if the current and maximum value are both 1, then the mode is direction only.
 
 	// After initialising, we set the maximum value (from 0) that the encoder represents
 	// along with the current value
@@ -228,6 +237,10 @@ Note that although the Arduino constructor allows the bit depth to be set, it on
     // to write to PWM_PIN
     analog.setCurrentValue(PWM_PIN, newValue);
 ```
+
+## ESP32 extras mode
+
+On ESP32 we are slowly adding support for direct IDF, as it's been requested by one of our clients. This will slowly appear over several releases. To enable this mode you can set the flag `IOA_USE_ESP32_EXTRAS`. Once you do this IDF functions are used for all digital IO functions. We always use IDF functions for analog input and DAC output, and are slowly moving toward direct LTDC functions for PWM instead of wrappers. 
 
 ## Other links
 

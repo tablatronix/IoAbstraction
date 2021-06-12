@@ -26,7 +26,7 @@ const unsigned int romStart = 800;
 // comment / uncomment to select
 I2cAt24Eeprom anEeprom(0x50, PAGESIZE_AT24C128);
 
-const char strData[15] = { "Hello Eeprom"};
+const char strData[100] = { "This is a quite long string that should need to be handled in many parts with wait states"};
 
 void setup() {
 	Serial.begin(115200);
@@ -37,19 +37,25 @@ void setup() {
 
 	Serial.println("Eeprom example starting");
 
+	// clear the ROM first..
+	for(int i=romStart;i<(romStart+100);i++) anEeprom.write8(i, 0);
+    Serial.println(anEeprom.hasErrorOccurred() ? "Write failure" : "Write success");
+
 	// now write the values to the rom. 8, 16 and 32 bit
 	anEeprom.write8(romStart, (byte)42);
 	anEeprom.write16(romStart + 1, 0xface);
 	anEeprom.write32(romStart + 3, 0xf00dface);
-	
-	// lastly write an array to the rom.
+    Serial.println(anEeprom.hasErrorOccurred() ? "Write failure" : "Write success");
+
+    // lastly write an array to the rom.
 	anEeprom.writeArrayToRom(romStart + 7, (const unsigned char*)strData, sizeof strData);
+
+    Serial.println(anEeprom.hasErrorOccurred() ? "Write failure" : "Write success");
 
 	Serial.println("Eeprom example written initial values");
 	
 	// we can check if there are any errors writing by calling hasErrorOccurred, for AVR there is never an error.
 	// but for i2c variants there may well be.
-	Serial.println(anEeprom.hasErrorOccurred() ? "With bus timeouts" : "Successfully");
 }
 
 void loop() {
@@ -64,14 +70,17 @@ void loop() {
 	Serial.println(anEeprom.read32(romStart + 3), HEX);
 
 	// finally we'll do hard comparisons against the array, as it's hard to check by hand.
-	char readBuffer[15];
+	char readBuffer[100];
 	anEeprom.readIntoMemArray((unsigned char*)readBuffer, romStart + 7, sizeof readBuffer);
 	Serial.print("Rom Array: ");
 	Serial.println(readBuffer);
+	Serial.print("String is same: ");
+	Serial.println(strcmp(readBuffer, strData)==0 ? "YES":"NO");
+
 
 	// we can check if there are any errors writing by calling hasErrorOccurred, for AVR there is never an error.
 	// but for i2c variants there may well be.
-	Serial.println(anEeprom.hasErrorOccurred() ? "With bus timeouts" : "Successfully");
+	Serial.println(anEeprom.hasErrorOccurred() ? "Read error" : "Successfully");
 
 	delay(10000);
 }
